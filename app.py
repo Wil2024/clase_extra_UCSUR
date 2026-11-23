@@ -112,7 +112,7 @@ def reloj():
 # ------------------------------------------------------------------ FILTROS
 st.sidebar.markdown("## 📊 El Analista de Negocios")
 with st.sidebar.form("f_equipo"):
-    _e = st.text_input("👥 Nombre de tu equipo / pareja", value=st.session_state.get("equipo", ""), placeholder="Ej.: Los Quipus Analíticos")
+    _e = st.text_input("👥 Nombre de tu equipo", value=st.session_state.get("equipo", ""), placeholder="Ej.: Los Quipus Analíticos")
     if st.form_submit_button("Registrar equipo"): st.session_state["equipo"] = _e.strip()
 equipo = st.session_state.get("equipo", "")
 if equipo: st.sidebar.success(f"Equipo registrado: {equipo}")
