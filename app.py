@@ -111,7 +111,11 @@ def reloj():
 
 # ------------------------------------------------------------------ FILTROS
 st.sidebar.markdown("## 📊 El Analista de Negocios")
-equipo = st.sidebar.text_input("👥 Nombre de tu equipo / pareja", placeholder="Ej.: Los Quipus Analíticos")
+with st.sidebar.form("f_equipo"):
+    _e = st.text_input("👥 Nombre de tu equipo / pareja", value=st.session_state.get("equipo", ""), placeholder="Ej.: Los Quipus Analíticos")
+    if st.form_submit_button("Registrar equipo"): st.session_state["equipo"] = _e.strip()
+equipo = st.session_state.get("equipo", "")
+if equipo: st.sidebar.success(f"Equipo registrado: {equipo}")
 with st.sidebar: reloj()
 st.sidebar.divider()
 modulo = st.sidebar.radio("Módulo", ["🏠 Inicio y dataset", "📈 Dashboard ejecutivo", "🌎 Análisis comercial", "👥 Análisis de clientes",
@@ -269,16 +273,19 @@ elif modulo.startswith("🎯"):
                "(reto 5: hasta 20). Rúbrica: extensión (≥ 40 palabras), uso de conceptos de negocio y una decisión concreta.")
     for r in range(1, 6):
         with st.expander(f"Reto {r}: {PREG[r]}", expanded=(r == 1)):
-            resp = ""
-            if r == 1: resp = st.selectbox("Tu respuesta", sorted(DF.pais.unique()), key="r1")
-            if r == 2: resp = st.selectbox("Tu respuesta", sorted(DF.categoria.unique()), key="r2")
-            if r == 3:
-                c1, c2 = st.columns(2); a = c1.selectbox("Canal que MÁS vende", sorted(DF.canal.unique()), key="r3a")
-                b = c2.selectbox("Canal MÁS rentable (margen %)", sorted(DF.canal.unique()), key="r3b"); resp = f"{a} | {b}"
-            if r == 4: resp = st.radio("Tu respuesta", ["Sí", "No"], horizontal=True, key="r4")
-            txt = st.text_area("¿Qué significa para el negocio? ¿Qué decisión tomarías?", key=f"t{r}", placeholder=EJ[r], height=120)
-            if st.button("Enviar respuesta", key=f"b{r}"):
-                if not equipo or len(txt.split()) < 8: st.error("Indica tu equipo y explica el hallazgo (mín. 8 palabras).")
+            with st.form(f"form{r}"):
+                resp = ""
+                if r == 1: resp = st.selectbox("Tu respuesta", sorted(DF.pais.unique()), key="r1")
+                if r == 2: resp = st.selectbox("Tu respuesta", sorted(DF.categoria.unique()), key="r2")
+                if r == 3:
+                    c1, c2 = st.columns(2); a = c1.selectbox("Canal que MÁS vende", sorted(DF.canal.unique()), key="r3a")
+                    b = c2.selectbox("Canal MÁS rentable (margen %)", sorted(DF.canal.unique()), key="r3b"); resp = f"{a} | {b}"
+                if r == 4: resp = st.radio("Tu respuesta", ["Sí", "No"], horizontal=True, key="r4")
+                txt = st.text_area("¿Qué significa para el negocio? ¿Qué decisión tomarías?", key=f"t{r}", placeholder=EJ[r], height=120)
+                enviado = st.form_submit_button("Enviar respuesta")
+            if enviado:
+                if not equipo: st.error("Primero escribe tu equipo en la barra lateral y pulsa «Registrar equipo».")
+                elif len(txt.split()) < 8: st.error(f"Tu explicación tiene {len(txt.split())} palabras; escribe al menos 8.")
                 else:
                     con = db(); prev = con.execute("select intentos from respuestas where equipo=? and reto=?", (equipo, r)).fetchone()
                     n = (prev[0] if prev else 0) + 1
