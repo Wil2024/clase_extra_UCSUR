@@ -150,7 +150,7 @@ if modulo.startswith("🏠"):
                 unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     c1.markdown("### 🧭 Ruta del laboratorio\n- **10 min** · Explicación de la app y el dataset\n- **20 min** · Exploración individual o en parejas\n"
-                "- **20 min** · Resolución de los 5 retos\n- **10 min** · Puesta en común de hallazgos")
+                "- **20 min** · Resolución de los 4 retos\n- **10 min** · Puesta en común de hallazgos")
     c2.markdown("### 🧠 Regla de oro\nNo basta con leer un gráfico. En cada reto responde: **¿Qué pasa? → ¿Por qué importa? → ¿Qué decisión tomarías?**\n\n"
                 "*Ejemplo:* “Marketplace tiene un margen de solo 11 %: entre descuentos y comisión se queda con muy poco. "
                 "Recomiendo renegociar la comisión antes de invertir más en ese canal.”")
@@ -256,23 +256,27 @@ elif modulo.startswith("🎯"):
     pro = full.groupby("producto").agg(u=("cantidad", "sum"), m=("margen", "sum"), n=("ingreso_neto", "sum")); pro["p"] = pro.m / pro.n
     top_u, top_m = set(pro.u.nlargest(3).index), set(pro.p.nlargest(3).index)
     CLAVE = {1: {full.groupby("pais").ingreso_neto.sum().idxmax()}, 2: {cat.m.idxmax(), cat.p.idxmax()},
-             3: {can.n.idxmax() + " | " + can.p.idxmax()}, 4: {"No" if top_u != top_m else "Sí"}, 5: None}
+             3: {can.n.idxmax() + " | " + can.p.idxmax()}, 4: {"No" if top_u != top_m else "Sí"}}
     PREG = {1: "¿Qué país genera mayores ingresos?", 2: "¿Qué categoría tiene mayor margen de contribución?",
-            3: "¿Qué canal vende más y cuál es más rentable?", 4: "¿Los productos más vendidos son necesariamente los más rentables?",
-            5: "¿Qué hallazgo podría cambiar una decisión comercial?"}
+            3: "¿Qué canal vende más y cuál es más rentable?", 4: "¿Los productos más vendidos son necesariamente los más rentables?"}
     EJ = {1: "Ejemplo: “Chile aporta US$ 310 mil, pero …, por lo tanto el comité debería …”",
           2: "Ejemplo: “Hogar tiene alto margen en soles pero …, lo que significa que …”",
           3: "Ejemplo: “El canal que más factura no es el que más deja: entre descuentos y comisión …, recomiendo …”",
-          4: "Ejemplo: “Vender más unidades no garantiza ganar más: el producto estrella deja solo … de margen, así que …”",
-          5: "Ejemplo: “Si Distribuidores recibe 12 % de descuento y su margen es …, bajar 3 puntos podría …, con el riesgo de …”"}
+          4: "Ejemplo: “Vender más unidades no garantiza ganar más: el producto estrella deja solo … de margen, así que …”"}
     CLAVES = ["porque", "por qué", "decisi", "recomiend", "margen", "descuento", "riesgo", "estrategia", "cliente", "costo", "precio", "rentab", "impacto", "oportunidad"]
-    def puntuar(t, mx):
+    def puntuar(t):
         t = t.lower(); p = min(len(t.split()) / 40, 1) * 5 + min(sum(c in t for c in CLAVES) / 5, 1) * 5
-        return round(p / 10 * mx)
-    st.caption("Los retos se corrigen con el dataset completo; usa los filtros para explorar. Puntos: dato correcto 10 (5 si no es al primer intento) + interpretación hasta 10 "
-               "(reto 5: hasta 20). Rúbrica: extensión (≥ 40 palabras), uso de conceptos de negocio y una decisión concreta.")
-    for r in range(1, 6):
-        with st.expander(f"Reto {r}: {PREG[r]}", expanded=(r == 1)):
+        return round(p)
+    st.caption("Los retos se corrigen con el dataset completo; usa los filtros para explorar. Puntos: dato correcto 10 + interpretación hasta 10 "
+               "(rúbrica: extensión ≥ 40 palabras, conceptos de negocio y una decisión concreta). Cada reto se responde una sola vez: "
+               "la respuesta queda registrada, sea correcta o no, y se comenta en la puesta en común.")
+    con = db()
+    for r in range(1, 5):
+        prev = con.execute("select respuesta, p_dato, p_interp from respuestas where equipo=? and reto=?", (equipo, r)).fetchone() if equipo else None
+        with st.expander(f"Reto {r}: {PREG[r]}" + (" · ✔ registrado" if prev else ""), expanded=(r == 1 and not prev)):
+            if prev:
+                st.info(f"Respuesta registrada: **{prev[0]}** · {'✅ dato correcto' if prev[1] > 0 else '❌ dato no coincide'} · {prev[1] + prev[2]} pts")
+                continue
             with st.form(f"form{r}"):
                 resp = ""
                 if r == 1: resp = st.selectbox("Tu respuesta", sorted(DF.pais.unique()), key="r1")
@@ -282,31 +286,27 @@ elif modulo.startswith("🎯"):
                     b = c2.selectbox("Canal MÁS rentable (margen %)", sorted(DF.canal.unique()), key="r3b"); resp = f"{a} | {b}"
                 if r == 4: resp = st.radio("Tu respuesta", ["Sí", "No"], horizontal=True, key="r4")
                 txt = st.text_area("¿Qué significa para el negocio? ¿Qué decisión tomarías?", key=f"t{r}", placeholder=EJ[r], height=120)
-                enviado = st.form_submit_button("Enviar respuesta")
+                enviado = st.form_submit_button("Registrar respuesta")
             if enviado:
                 if not equipo: st.error("Primero escribe tu equipo en la barra lateral y pulsa «Registrar equipo».")
                 elif len(txt.split()) < 8: st.error(f"Tu explicación tiene {len(txt.split())} palabras; escribe al menos 8.")
                 else:
-                    con = db(); prev = con.execute("select intentos from respuestas where equipo=? and reto=?", (equipo, r)).fetchone()
-                    n = (prev[0] if prev else 0) + 1
-                    ok = r == 5 or resp in CLAVE[r]
-                    pd_ = 0 if r == 5 else (10 if n == 1 else 5) if ok else 0
-                    pi = puntuar(txt, 20 if r == 5 else 10)
-                    with con: con.execute("insert or replace into respuestas values(?,?,?,?,?,?,?,?)", (equipo, r, resp, txt, pd_, pi, n, datetime.now().isoformat(timespec="seconds")))
-                    (st.success if ok else st.error)(("✅ Dato correcto. " if r != 5 else "") + f"+{pd_ + pi} pts" if ok else "❌ El dato no coincide. Revisa filtros y métrica (¿ingreso neto o margen %?) y reintenta.")
+                    ok = resp in CLAVE[r]; pd_ = 10 if ok else 0; pi = puntuar(txt)
+                    with con: con.execute("insert or replace into respuestas values(?,?,?,?,?,?,?,?)", (equipo, r, resp, txt, pd_, pi, 1, datetime.now().isoformat(timespec="seconds")))
+                    if ok: st.success(f"✅ Respuesta registrada: dato correcto. +{pd_ + pi} pts")
+                    else: st.warning(f"Respuesta registrada: el dato no coincide con el dataset completo. +{pi} pts por tu interpretación. Lo revisaremos en la puesta en común.")
     st.divider(); st.subheader("🏅 Ranking del laboratorio")
-    lb = pd.read_sql("select equipo, sum(p_dato+p_interp) as puntos, count(*) as retos from respuestas group by equipo order by puntos desc", db())
+    lb = pd.read_sql("select equipo, sum(p_dato+p_interp) as puntos, count(*) as retos from respuestas where reto<=4 group by equipo order by puntos desc", db())
     if lb.empty: st.info("Aún no hay respuestas.")
     else:
         lb.insert(0, "🏆", ["🥇", "🥈", "🥉"] + [""] * max(len(lb) - 3, 0) if len(lb) > 3 else ["🥇", "🥈", "🥉"][:len(lb)])
         st.dataframe(lb, hide_index=True, **ANCHO)
     if equipo:
-        mine = pd.read_sql("select * from respuestas where equipo=?", db(), params=(equipo,))
+        mine = pd.read_sql("select * from respuestas where equipo=? and reto<=4", db(), params=(equipo,))
         B = []
         if {"📈 Dashboard ejecutivo", "🌎 Análisis comercial", "👥 Análisis de clientes", "💰 Análisis de rentabilidad"} <= st.session_state.visitados: B.append("🧭 Explorador total")
-        if ((mine.reto != 5) & (mine.p_dato > 0)).sum() >= 3: B.append("🎯 Analista certero")
+        if (mine.p_dato > 0).sum() >= 3: B.append("🎯 Analista certero")
         if (mine.p_interp >= 8).any(): B.append("🧠 Pensamiento crítico")
-        if ((mine.reto == 5) & (mine.p_interp >= 14)).any(): B.append("🔍 Cazador de hallazgos")
         st.markdown("**Tus insignias:** " + (" ".join(f"<span class='badge'>{x}</span>" for x in B) or "aún ninguna — ¡explora y responde!"), unsafe_allow_html=True)
 
 else:
@@ -320,7 +320,8 @@ else:
     if c2.button("⏹️ Reiniciar reloj"):
         with db() as c: c.execute("delete from config where k='inicio'")
         st.rerun()
-    res = pd.read_sql("select * from respuestas order by ts", db())
+    res = pd.read_sql("select * from respuestas where reto<=4 order by ts", db())
+    res["resultado"] = np.where(res.p_dato > 0, "Correcta", "Incorrecta")
     st.subheader("📝 Respuestas de los equipos"); st.dataframe(res, **ANCHO, hide_index=True)
     st.download_button("⬇️ Exportar respuestas (CSV)", res.to_csv(index=False).encode("utf-8-sig"), "respuestas_laboratorio.csv", "text/csv")
     st.download_button("⬇️ Exportar dataset (CSV)", DF.to_csv(index=False).encode("utf-8-sig"), "dataset_analista_negocios.csv", "text/csv")
@@ -332,4 +333,4 @@ else:
     a, b = st.columns(2)
     a.write("**Reto 1 · Ingreso por país**"); a.dataframe(k1.round(0)); a.write("**Reto 3 · Canales**"); a.dataframe(k3.round(3))
     b.write("**Reto 2 · Categorías**"); b.dataframe(k2.round(3)); b.write("**Reto 4 · Productos (por unidades)**"); b.dataframe(k4.round(3))
-    st.markdown("**Preguntas para la puesta en común:** ¿Qué canal recortarías primero y por qué? ¿Qué cliente protegerías? ¿Qué descuento renegociarías y qué riesgo asumirías?")
+    st.markdown("**Preguntas para la puesta en común:** ¿Qué canal recortarías primero y por qué? ¿Qué cliente protegerías? ¿Qué descuento renegociarías y qué riesgo asumirías? ¿Qué hallazgo cambiaría una decisión comercial?")
